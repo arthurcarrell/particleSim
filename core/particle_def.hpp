@@ -8,10 +8,12 @@ class Particle {
         float x;
         float y;
         int type;
-        int size = 10;
+        int size = 2;
         float velocity;
         int direction;
         Color color;
+
+        bool hasAlreadyBounced = false;
 
         // move the particle a certain X/Y value
         void MoveCoords(Vec2 coordinates) {

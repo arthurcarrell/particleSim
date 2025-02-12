@@ -30,6 +30,8 @@ const char PROJECT_Version[] = "1.0"; // project version; self explanatory.
 const char PROJECT_ProjectName[] = "com.asteristired.particle_sim"; // the internal name of the project, no spaces or special characters.
 const char PROJECT_AppName[] = "Particle Simulation!"; // the name that appears on the window.
 
+float msElapsed = 0;
+unsigned long framesDrawn = 0;
 /* GLOBAL VARIABLES */
 
 
@@ -37,25 +39,25 @@ namespace ParticleSim {
 
     /* GLOBAL VARIABLES */
     vector<Particle> scene;
-    unsigned long framesElasped;
 
     int particleBoundsX = 1280;
     int particleBoundsY = 720;
+
+    const float FIXED_TIME_STEP = 0.016f;
+    float frame_accumulator = 0.0f;
 
     /* Runs upon program start */
     void Init(void **appstate, int argc, char *argv[]) {
 
         // populate the scene with 10 particles
-        for (int particleCount=0; particleCount < 72; particleCount++) {
+        for (int particleCount=0; particleCount < 25000; particleCount++) {
             // define a new particle
             Particle newParticle;
-            //newParticle.x = rand() % particleBoundsX;
-            //newParticle.y = rand() % particleBoundsY;
-            newParticle.x = particleBoundsX / 2;
-            newParticle.y = particleBoundsY / 2;
+            newParticle.x = rand() % particleBoundsX;
+            newParticle.y = rand() % particleBoundsY;
             
             newParticle.velocity = 0.1;
-            newParticle.direction = particleCount*5;
+            newParticle.direction = rand() % 360;
             newParticle.color = {255,255,255, SDL_ALPHA_OPAQUE};
 
 
@@ -68,22 +70,56 @@ namespace ParticleSim {
     }
 
     void SimParticle(void *appstate, Particle *particle, float deltaTime) {
+
         particle->MoveDirection(particle->velocity * deltaTime, particle->direction);
 
+        /* Check if bounced on the X coordinate */
+        if (particle->x >= particleBoundsX || particle->x <= 0) {
+            if (!particle->hasAlreadyBounced) {
+                /* Yes, flip it 180 degrees */
+                particle->direction = 180 - particle->direction;
+                particle->hasAlreadyBounced = true;
+            }
+        }
+
+        /* Check if bounced on the Y coordinate */
+        if (particle->y >= particleBoundsY || particle->y <= 0) {
+            if (!particle->hasAlreadyBounced) {
+                /* Yes, reverse the direction */
+                particle->direction = -particle->direction;
+                particle->hasAlreadyBounced = true;
+            }
+        }
+
+        if (particle->x > 0 && particle->x < particleBoundsX && particle->y > 0 && particle->y < particleBoundsY) {
+            particle->hasAlreadyBounced = false;
+        }   
+
     }
-    /* Runs each frame. When doing a physics calculation, make sure to multiply by deltaTime so framerate doesnt cause wacky numbers */
-    void Frame(void *appstate, float deltaTime) {
-        framesElasped++;
+
+    /* Runs at 60FPS, even if the framerate is much higher, multiply by deltaTime incase framerate drops below 60. */
+    void LazyFrame(void *appstate, float deltaTime) {
         // for each particle
         for (int particleIndex = 0; particleIndex < scene.size(); particleIndex++ ) {
 
             // this particle
             SimParticle(appstate, &scene[particleIndex], deltaTime);
+        }
+    }
 
+    /* Runs each frame. When doing a physics calculation, make sure to multiply by deltaTime so framerate doesnt cause wacky numbers */
+    void Frame(void *appstate, float deltaTime) {
+        framesDrawn++;
+        frame_accumulator += deltaTime;
+
+        while (frame_accumulator >= FIXED_TIME_STEP) {
+            // run lazy frame
+            LazyFrame(appstate, FIXED_TIME_STEP);
+            frame_accumulator = 0;
         }
-        if (framesElasped == 10000) {
-                SDL_Delay(1000);
-        }
+        
+        //SDL_Log("Time since last frame (ms): %f  - framerate estimate: %i", deltaTime, (int)(1000/deltaTime));
+        msElapsed += deltaTime;
     }
 
 }
@@ -241,6 +277,7 @@ SDL_AppResult SDL_AppIterate(void *appstate) {
 /* Runs on shutdown */
 void SDL_AppQuit(void *appstate, SDL_AppResult result) {
     /* SDL cleans up window/renderer */
+    SDL_Log("average frame render time: %f - average FPS: %i", (msElapsed/framesDrawn), (int)(1000/(msElapsed/framesDrawn)));
 }
 
 int main() {
