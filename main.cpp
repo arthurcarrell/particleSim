@@ -54,7 +54,7 @@ namespace ParticleSim {
             newParticle.x = particleBoundsX / 2;
             newParticle.y = particleBoundsY / 2;
             
-            newParticle.velocity = 0.01;
+            newParticle.velocity = 0.1;
             newParticle.direction = particleCount*5;
             newParticle.color = {255,255,255, SDL_ALPHA_OPAQUE};
 
@@ -67,19 +67,22 @@ namespace ParticleSim {
         SDL_Log("Particles created! Amount: %lu", scene.size());
     }
 
-    void SimParticle(void *appstate, Particle *particle) {
-        particle->MoveDirection(particle->velocity, particle->direction);
+    void SimParticle(void *appstate, Particle *particle, float deltaTime) {
+        particle->MoveDirection(particle->velocity * deltaTime, particle->direction);
 
     }
-    /* Runs each frame. Avoid doing physics calculations here as frames are not consistent (he says, doing physics calcs) */
-    void Frame(void *appstate) {
+    /* Runs each frame. When doing a physics calculation, make sure to multiply by deltaTime so framerate doesnt cause wacky numbers */
+    void Frame(void *appstate, float deltaTime) {
         framesElasped++;
         // for each particle
         for (int particleIndex = 0; particleIndex < scene.size(); particleIndex++ ) {
-            
-            // this particle
-            SimParticle(appstate, &scene[particleIndex]);
 
+            // this particle
+            SimParticle(appstate, &scene[particleIndex], deltaTime);
+
+        }
+        if (framesElasped == 10000) {
+                SDL_Delay(1000);
         }
     }
 
@@ -218,9 +221,15 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
 
 /* Runs once per frame, the meat and potatoes of the program. */
+long NOW = SDL_GetPerformanceCounter();
+long LAST = 0;
+double calcDeltaTime = 0;
 SDL_AppResult SDL_AppIterate(void *appstate) {
 
-    ParticleSim::Frame(appstate);
+    LAST = NOW;
+    NOW = SDL_GetPerformanceCounter();
+    calcDeltaTime = ((NOW - LAST)*1000 / (double)SDL_GetPerformanceFrequency());
+    ParticleSim::Frame(appstate, calcDeltaTime);
 
     Rendering::Frame(appstate);
 
