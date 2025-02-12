@@ -3,10 +3,11 @@ Particle simulation using SDL
 
 */
 
-#include <cstdlib>
-#include <unistd.h>
+
 #define SDL_MAIN_USE_CALLBACKS 1 /* run SDL_AppInit instead of main() */
 
+#include <cstdlib>
+#include <unistd.h>
 
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_events.h>
@@ -32,7 +33,6 @@ const char PROJECT_AppName[] = "Particle Simulation!"; // the name that appears 
 
 float msElapsed = 0;
 unsigned long framesDrawn = 0;
-/* GLOBAL VARIABLES */
 
 
 namespace ParticleSim {
@@ -42,26 +42,35 @@ namespace ParticleSim {
 
     int particleBoundsX = 1280;
     int particleBoundsY = 720;
-
-    const float FIXED_TIME_STEP = 0.016f;
-    float frame_accumulator = 0.0f;
+    int nextFreeID = 0;
 
     /* Runs upon program start */
     void Init(void **appstate, int argc, char *argv[]) {
 
         // populate the scene with 10 particles
-        for (int particleCount=0; particleCount < 25000; particleCount++) {
+        for (int particleCount=0; particleCount < 1000; particleCount++) {
             // define a new particle
             Particle newParticle;
+
+            // give the particle an ID and increment the ID counter to prevent duplicates.
+            newParticle.id = nextFreeID;
+            nextFreeID++;
+
             newParticle.x = rand() % particleBoundsX;
             newParticle.y = rand() % particleBoundsY;
             
             newParticle.velocity = 0.1;
             newParticle.direction = rand() % 360;
-            newParticle.color = {255,255,255, SDL_ALPHA_OPAQUE};
+            newParticle.type = rand() % 2;
+            if (newParticle.type == 1) {
+                newParticle.color = {255,0,0, SDL_ALPHA_OPAQUE};
+            } else if (newParticle.type == 0) {
+                newParticle.color = {0,0,255,SDL_ALPHA_OPAQUE};
+            } else {
+                newParticle.color = {255,255,255,SDL_ALPHA_OPAQUE};
+            }
 
 
-            if (newParticle.direction == 90) { newParticle.color = {255,0,0, SDL_ALPHA_OPAQUE}; }
 
             SDL_Log("created particle at X: %f, Y: %f error: %s", newParticle.x, newParticle.y, SDL_GetError());
             scene.push_back(newParticle);
@@ -69,10 +78,31 @@ namespace ParticleSim {
         SDL_Log("Particles created! Amount: %lu", scene.size());
     }
 
-    void SimParticle(void *appstate, Particle *particle, float deltaTime) {
+    Color AvgColours(Color firstColor, Color secondColor) {
+        /* 
+        NOTES:
+        if we have one color that is 255, 0, 0
+        and another color that is 0, 0, 255
+        it should be about
+        128, 0, 128 for both upon hit.
+         */
+        Color finalColor = {0,0,0, SDL_ALPHA_OPAQUE};
+        finalColor.r += firstColor.r / 2;
+        finalColor.g += firstColor.g / 2;
+        finalColor.b += firstColor.b / 2;
+        
+        finalColor.r += secondColor.r / 2;
+        finalColor.g += secondColor.g / 2;
+        finalColor.b += secondColor.b / 2;
 
-        particle->MoveDirection(particle->velocity * deltaTime, particle->direction);
+        return finalColor;
+        
+    }
 
+    void DoBounceCheck(Particle *particle) {
+        /* Do bouncing if we are hitting the edge of the screen. 
+           hasAlreadyBounced is used to prevent the particles hitting themselves twice and bouncing away.
+        */
         /* Check if bounced on the X coordinate */
         if (particle->x >= particleBoundsX || particle->x <= 0) {
             if (!particle->hasAlreadyBounced) {
@@ -90,32 +120,81 @@ namespace ParticleSim {
                 particle->hasAlreadyBounced = true;
             }
         }
+    }
+
+    void Sim1_ColorAdding(void *appstate, Particle *particle, float deltaTime) {
+        // loop through EVERY other particle and see if they are touching us - this gives each frame a time complexity of O(n^2) which is BAD.
+        for (int particleIndex = 0; particleIndex < scene.size(); particleIndex++ ) {
+            Particle *thisParticle = &scene[particleIndex];
+            // If thisParticle and particle are the same, then we are looking at ourselves, skip.
+            if (thisParticle->id != particle->id ) { 
+                float distance = particle->GetParticleDistance(thisParticle->x,thisParticle->y);
+                if (distance < particle->size || distance < thisParticle->size) {
+                    // the particle is being touched.
+                    thisParticle->color = AvgColours(particle->color, thisParticle->color);
+                }
+
+            }
+        }
+    }
+
+    void Sim2_ColorAttraction(void *appstate, Particle *particle, float deltaTime) {
+
+        /* 
+            Colors are attracted to colors of the same type, and are repelled by colors of the opposite type.
+         */
+
+
+        // loop through EVERY other particle and see if they are touching us - this gives each frame a time complexity of O(n^2) which is BAD.
+        for (int particleIndex = 0; particleIndex < scene.size(); particleIndex++ ) {
+            Particle *thisParticle = &scene[particleIndex];
+            // If thisParticle and particle are the same, then we are looking at ourselves, skip.
+            if (thisParticle->id != particle->id ) { 
+                float distance = particle->GetParticleDistance(thisParticle->x,thisParticle->y);
+                float radianAttractDir = particle->GetDirectionOfOtherParticle(thisParticle->x, thisParticle->y);
+                
+                // calculate the speed of attraction
+                particle->velocity = (1 / distance) * 0.01;
+                if (particle->velocity > 1) {particle->velocity = 0;}
+
+                // calculate the force of repulsion (this is used to prevent them from crashing into another)
+                if (distance <= (particle->size + thisParticle->size)) {
+                    particle->velocity = -(particle->velocity * 0.5);
+                }
+
+                if (particle->type != thisParticle->type) {
+                    // turn the force of attraction into one of repulsion
+                    particle->velocity = particle->velocity * -1;
+                }
+
+
+                particle->MoveDirection(particle->velocity * deltaTime, radianAttractDir, true);
+                //DoBounceCheck(particle);
+            }
+        }
+    }
+
+    void SimParticle(void *appstate, Particle *particle, float deltaTime) {
+
+        //particle->MoveDirection(particle->velocity * deltaTime, particle->direction);
+        //DoBounceCheck(particle); // this should always be ran after MoveDirection();
 
         if (particle->x > 0 && particle->x < particleBoundsX && particle->y > 0 && particle->y < particleBoundsY) {
             particle->hasAlreadyBounced = false;
-        }   
-
-    }
-
-    /* Runs at 60FPS, even if the framerate is much higher, multiply by deltaTime incase framerate drops below 60. */
-    void LazyFrame(void *appstate, float deltaTime) {
-        // for each particle
-        for (int particleIndex = 0; particleIndex < scene.size(); particleIndex++ ) {
-
-            // this particle
-            SimParticle(appstate, &scene[particleIndex], deltaTime);
         }
+
+        Sim2_ColorAttraction(appstate, particle, deltaTime);
+
     }
 
     /* Runs each frame. When doing a physics calculation, make sure to multiply by deltaTime so framerate doesnt cause wacky numbers */
     void Frame(void *appstate, float deltaTime) {
         framesDrawn++;
-        frame_accumulator += deltaTime;
 
-        while (frame_accumulator >= FIXED_TIME_STEP) {
-            // run lazy frame
-            LazyFrame(appstate, FIXED_TIME_STEP);
-            frame_accumulator = 0;
+        for (int particleIndex = 0; particleIndex < scene.size(); particleIndex++ ) {
+
+            // this particle
+            SimParticle(appstate, &scene[particleIndex], deltaTime);
         }
         
         //SDL_Log("Time since last frame (ms): %f  - framerate estimate: %i", deltaTime, (int)(1000/deltaTime));
@@ -139,6 +218,13 @@ namespace Rendering {
 
     /* Draw a hollow circle */
     void DrawCircle(SDL_Renderer *renderer, Vec2f coordinates, int radius) {
+
+        // little optimisation, if the radius is 1, then we are only drawing a single pixel. 
+        if (radius == 1) {
+            SDL_RenderPoint(renderer, coordinates.x, coordinates.y);
+            return;
+        }
+
         int diameter = (radius * 2);
         int x = (radius - 1);
         int y = 0;

@@ -8,7 +8,8 @@ class Particle {
         float x;
         float y;
         int type;
-        int size = 2;
+        int id;
+        int size = 1;
         float velocity;
         int direction;
         Color color;
@@ -39,6 +40,21 @@ class Particle {
             
             this->x += dx;
             this->y += dy;
+        }
+
+        float GetParticleDistance(int ox, int oy) {
+            // use pythagorus theorem to calculate the hypotenuse
+            float answer = sqrt(((ox - this->x) * (ox - this->x)) + ((oy - this->y) * (oy - this->y)));
+            return answer;
+            
+        }
+
+        float GetDirectionOfOtherParticle(int ox, int oy) {
+            double dx = ox-x; double dy = oy-y;
+
+            double otherDirection = atan2(dy, dx);
+
+            return otherDirection;
         }
 };
 
