@@ -1,0 +1,43 @@
+#ifndef PARTICLE_DEF_HPP
+#define PARTICLE_DEF_HPP
+#include "utils.hpp"
+#include <cmath>
+
+class Particle {
+    public:
+        float x;
+        float y;
+        int type;
+        int size = 10;
+        float velocity;
+        int direction;
+        Color color;
+
+        // move the particle a certain X/Y value
+        void MoveCoords(Vec2 coordinates) {
+            this->x += coordinates.x;
+            this->y += coordinates.y;
+        }
+
+        void MoveDirection(float amount, float angle, bool isRadians=false) {
+            // trigonometry can be used in order to calculate diagonal movement
+            // sin and cos is used to figure out the hypotonuse.
+            // presumes that degrees are being used. if they are: convert to radians
+
+            // if radians are being used, which we presume not, then skip this step.
+            if (!isRadians) {
+                // convert angle to radians
+                double PI = 3.14159265;
+                angle = angle * PI/180;
+            }
+            
+
+            float dx = amount * cos(angle);
+            float dy = amount * sin(angle);
+            
+            this->x += dx;
+            this->y += dy;
+        }
+};
+
+#endif
