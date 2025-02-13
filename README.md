@@ -7,7 +7,7 @@ Now, this project has turned from making a particle simulation to optimising a p
 
 Im going to achieve this by adding:
 
-- Spatial Hashing
+- ~~Spatial Hashing~~
 - Batch Rendering
 
 
@@ -24,7 +24,13 @@ This one is a lot more simple to descirbe and a lot more simple to program. Inst
 This should make the program up to 5x faster.
 
 
+## Current Benchmarks
 
 
+| Optimisation | 1,000 Particles | 10,000 Particles |
+| -------- | ------- | ------ |
+| None | 14 FPS | 0 FPS |
+| Spatial Hashing | 309 FPS | 7 FPS |
 
+<br><br>
 TODO: Add how the particle simulation actually works to this lol.

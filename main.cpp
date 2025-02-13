@@ -4,6 +4,8 @@ Particle simulation using SDL
 */
 
 
+#include <functional>
+#include <unordered_map>
 #define SDL_MAIN_USE_CALLBACKS 1 /* run SDL_AppInit instead of main() */
 
 #include <cstdlib>
@@ -39,6 +41,9 @@ namespace ParticleSim {
 
     /* GLOBAL VARIABLES */
     vector<Particle> scene;
+
+    const int CELL_SIZE = 30;
+    unordered_map<int, vector<Particle* >> hashmap_grid;
 
     int particleBoundsX = 1280;
     int particleBoundsY = 720;
@@ -77,6 +82,63 @@ namespace ParticleSim {
         }
         SDL_Log("Particles created! Amount: %lu", scene.size());
     }
+
+
+    /* --- Optimisation 1: SPATIAL HASHING --- */
+
+    /* Get the cellID of the current particle. */
+    int SH_GetCellID(int x, int y) {
+        int cellX = x / CELL_SIZE;
+        int cellY = y / CELL_SIZE;
+
+        // the grid needs to be < 10000 wide.
+        return cellX * 10000 + cellY;
+    }
+
+    /* Clear the hashmap */
+    void SH_ClearGrid() {
+        hashmap_grid.clear();
+    }
+
+    /* Insert particle into the hashmap */
+    void SH_InsertInGrid(Particle* particle) {
+        int cellID = SH_GetCellID(particle->x, particle->y);
+        hashmap_grid[cellID].push_back(particle);
+    }
+
+
+    /* Populate the hashmap with all the particles. */
+    void SH_PopulateGrid() {
+        SH_ClearGrid();
+
+        for (Particle& particle : scene) {
+            SH_InsertInGrid(&particle);
+        }
+    }
+
+    /* Returns a list of pointers to particles  */
+    vector<Particle*> SH_GetNearbyParticles(Particle *particle) {
+        // this is the vector of all the neighbors, this is going to be used instead of every single particle.
+        vector<Particle*> neighbors;
+
+        int cellX = particle->x / CELL_SIZE;
+        int cellY = particle->y / CELL_SIZE;
+
+        /* Ok I'll admit I got some help from ChatGPT on how to do this. */
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dy = -1; dy <= 1; dy++) {
+                int neighborID = SH_GetCellID((cellX + dx) * CELL_SIZE, (cellY + dy) * CELL_SIZE);
+
+                // add particles from neighboring cells
+                if (hashmap_grid.find(neighborID) != hashmap_grid.end()) {
+                    neighbors.insert(neighbors.end(), hashmap_grid[neighborID].begin(), hashmap_grid[neighborID].end());
+                }
+            }
+        }
+
+        return neighbors;
+    }
+
 
     Color AvgColours(Color firstColor, Color secondColor) {
         /* 
@@ -138,40 +200,57 @@ namespace ParticleSim {
         }
     }
 
+    /* Terrible name, the function for each particle to run when compared to another in the second simulation */
+    void Sim2_Func_effectParticle(Particle *particle, Particle *thisParticle, float deltaTime) {
+
+        float distance = particle->GetParticleDistance(thisParticle->x,thisParticle->y);
+        float radianAttractDir = particle->GetDirectionOfOtherParticle(thisParticle->x, thisParticle->y);
+                
+        // calculate the speed of attraction
+        particle->velocity = (1 / distance) * 0.1;
+        if (particle->velocity > 1) {particle->velocity = 0;}
+
+        // calculate the force of repulsion (this is used to prevent them from crashing into another)
+        if (distance <= (particle->size + thisParticle->size)) {
+            particle->velocity = -(particle->velocity * 0.5);
+        }
+
+        if (particle->type != thisParticle->type) {
+            // turn the force of attraction into one of repulsion
+            particle->velocity = particle->velocity * -1;
+        }
+
+
+        particle->MoveDirection(particle->velocity * deltaTime, radianAttractDir, true);
+        DoBounceCheck(particle);
+    }
+
+    /* The original code for the simulation, this is with no optimisations */
     void Sim2_ColorAttraction(void *appstate, Particle *particle, float deltaTime) {
 
         /* 
             Colors are attracted to colors of the same type, and are repelled by colors of the opposite type.
          */
 
-
         // loop through EVERY other particle and see if they are touching us - this gives each frame a time complexity of O(n^2) which is BAD.
         for (int particleIndex = 0; particleIndex < scene.size(); particleIndex++ ) {
             Particle *thisParticle = &scene[particleIndex];
             // If thisParticle and particle are the same, then we are looking at ourselves, skip.
             if (thisParticle->id != particle->id ) { 
-                float distance = particle->GetParticleDistance(thisParticle->x,thisParticle->y);
-                float radianAttractDir = particle->GetDirectionOfOtherParticle(thisParticle->x, thisParticle->y);
-                
-                // calculate the speed of attraction
-                particle->velocity = (1 / distance) * 0.01;
-                if (particle->velocity > 1) {particle->velocity = 0;}
-
-                // calculate the force of repulsion (this is used to prevent them from crashing into another)
-                if (distance <= (particle->size + thisParticle->size)) {
-                    particle->velocity = -(particle->velocity * 0.5);
-                }
-
-                if (particle->type != thisParticle->type) {
-                    // turn the force of attraction into one of repulsion
-                    particle->velocity = particle->velocity * -1;
-                }
-
-
-                particle->MoveDirection(particle->velocity * deltaTime, radianAttractDir, true);
-                //DoBounceCheck(particle);
+                Sim2_Func_effectParticle(particle, thisParticle, deltaTime);
             }
         }
+    }
+
+    /* The first optimised simulation using spatial hashing. All functions with a SH_ at the start are to do with this. */
+    void Sim2_ColorAttraction_FirstOptimise(void *appstate, Particle *particle, float deltaTime) {
+        vector<Particle*> nearbyParticles = SH_GetNearbyParticles(particle);
+        for (Particle *thisParticle : nearbyParticles) {
+            if (particle->id != thisParticle->id) {
+                Sim2_Func_effectParticle(particle, thisParticle, deltaTime);
+            }     
+        }
+        
     }
 
     void SimParticle(void *appstate, Particle *particle, float deltaTime) {
@@ -183,13 +262,18 @@ namespace ParticleSim {
             particle->hasAlreadyBounced = false;
         }
 
-        Sim2_ColorAttraction(appstate, particle, deltaTime);
+        Sim2_ColorAttraction_FirstOptimise(appstate, particle, deltaTime);
 
     }
 
     /* Runs each frame. When doing a physics calculation, make sure to multiply by deltaTime so framerate doesnt cause wacky numbers */
     void Frame(void *appstate, float deltaTime) {
         framesDrawn++;
+
+        SH_ClearGrid();
+        for (Particle &addParticle : scene) {
+            SH_InsertInGrid(&addParticle);
+        }
 
         for (int particleIndex = 0; particleIndex < scene.size(); particleIndex++ ) {
 
