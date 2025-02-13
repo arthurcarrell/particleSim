@@ -3,11 +3,9 @@ Particle simulation using SDL
 
 */
 
-
-#include <functional>
-#include <unordered_map>
 #define SDL_MAIN_USE_CALLBACKS 1 /* run SDL_AppInit instead of main() */
 
+#include <unordered_map>
 #include <cstdlib>
 #include <unistd.h>
 
