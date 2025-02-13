@@ -9,7 +9,7 @@ class Particle {
         float y;
         int type;
         int id;
-        int size = 1;
+        float size = 1;
         float velocity;
         int direction;
         Color color;

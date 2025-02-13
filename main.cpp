@@ -3,6 +3,7 @@ Particle simulation using SDL
 
 */
 
+#include <csignal>
 #define SDL_MAIN_USE_CALLBACKS 1 /* run SDL_AppInit instead of main() */
 
 #include <unordered_map>
@@ -51,7 +52,7 @@ namespace ParticleSim {
     void Init(void **appstate, int argc, char *argv[]) {
 
         // populate the scene with 10 particles
-        for (int particleCount=0; particleCount < 1000; particleCount++) {
+        for (int particleCount=0; particleCount < 5000; particleCount++) {
             // define a new particle
             Particle newParticle;
 
@@ -64,13 +65,13 @@ namespace ParticleSim {
             
             newParticle.velocity = 0.1;
             newParticle.direction = rand() % 360;
-            newParticle.type = rand() % 2;
+            newParticle.type = rand() % 3;
             if (newParticle.type == 1) {
                 newParticle.color = {255,0,0, SDL_ALPHA_OPAQUE};
             } else if (newParticle.type == 0) {
                 newParticle.color = {0,0,255,SDL_ALPHA_OPAQUE};
             } else {
-                newParticle.color = {255,255,255,SDL_ALPHA_OPAQUE};
+                newParticle.color = {0,255,0,SDL_ALPHA_OPAQUE};
             }
 
 
@@ -205,17 +206,17 @@ namespace ParticleSim {
         float radianAttractDir = particle->GetDirectionOfOtherParticle(thisParticle->x, thisParticle->y);
                 
         // calculate the speed of attraction
-        particle->velocity = (1 / distance) * 0.1;
+        particle->velocity = (1 / distance) * 0.05;
         if (particle->velocity > 1) {particle->velocity = 0;}
 
         // calculate the force of repulsion (this is used to prevent them from crashing into another)
-        if (distance <= (particle->size + thisParticle->size)) {
-            particle->velocity = -(particle->velocity * 0.5);
+        if (distance <= (particle->size + thisParticle->size)+3) {
+            particle->velocity = -(particle->velocity * 1);
         }
 
         if (particle->type != thisParticle->type) {
             // turn the force of attraction into one of repulsion
-            particle->velocity = particle->velocity * -1;
+            particle->velocity = particle->velocity * -0.5;
         }
 
 
@@ -236,6 +237,8 @@ namespace ParticleSim {
             // If thisParticle and particle are the same, then we are looking at ourselves, skip.
             if (thisParticle->id != particle->id ) { 
                 Sim2_Func_effectParticle(particle, thisParticle, deltaTime);
+
+                
             }
         }
     }
@@ -248,6 +251,11 @@ namespace ParticleSim {
                 Sim2_Func_effectParticle(particle, thisParticle, deltaTime);
             }     
         }
+
+
+        // add some slight attraction to the middle in order to keep the particles from leaving the screen.
+        float radiansDir = particle->GetDirectionOfOtherParticle(particleBoundsX/2, particleBoundsY/2);
+        particle->MoveDirection(particle->velocity * deltaTime * 1, radiansDir, true);
         
     }
 
@@ -277,6 +285,8 @@ namespace ParticleSim {
 
             // this particle
             SimParticle(appstate, &scene[particleIndex], deltaTime);
+
+            
         }
         
         //SDL_Log("Time since last frame (ms): %f  - framerate estimate: %i", deltaTime, (int)(1000/deltaTime));
