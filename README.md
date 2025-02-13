@@ -7,7 +7,7 @@ Now, this project has turned from making a particle simulation to optimising a p
 
 Im going to achieve this by adding:
 
-- Spatial Hashing
+- ~~Spatial Hashing~~
 - Batch Rendering
 
 
