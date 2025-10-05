@@ -17,6 +17,7 @@ While technically every single particle in the simulation is effected by every o
 The simulation is split into cells, and when checking the particle, we check the cell it is in and ajacent cells around it. This allows us to check *far far* less cells then in a non-optimised approach.
 
 According to \**cough*\* chatGPT this will speed up the program by up to 100 times.
+*(I didnt use chatGPT to do it though)*
 
 ### Batch Rendering
 This one is a lot more simple to descirbe and a lot more simple to program. Instead of repeatedly using `SDL_RenderPoint`, which is pretty slow. We take everything we want to draw and we feed it to `SDL_RenderGeometry`.
